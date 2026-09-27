@@ -14,4 +14,12 @@ sealed interface CalculatorIntent {
     data class SetHaptics(val enabled: Boolean) : CalculatorIntent
     data class SetUseRadians(val enabled: Boolean) : CalculatorIntent
     data class SetKeepHistory(val enabled: Boolean) : CalculatorIntent
+    data class SetWallpaperColors(val enabled: Boolean) : CalculatorIntent
+    data class ToggleSettingsSection(val section: SettingsSection?) : CalculatorIntent
+    data class SetNotesLine(val index: Int, val value: String) : CalculatorIntent
+    data class AddNotesLine(val text: String = "") : CalculatorIntent
 }
+
+/** Category rows on the Settings main page, each opening its own sub-page — matching the
+ *  Pixel Settings pattern shared with Notes/Clock/Weather. */
+enum class SettingsSection { APPEARANCE, CALCULATION, DATA }

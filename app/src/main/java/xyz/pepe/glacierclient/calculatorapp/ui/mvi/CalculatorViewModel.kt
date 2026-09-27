@@ -40,10 +40,20 @@ class CalculatorViewModel(private val settingsRepository: SettingsRepository) : 
             CalculatorIntent.ClearHistory -> _uiState.update { it.copy(history = emptyList()) }
             is CalculatorIntent.DeleteHistoryEntry -> _uiState.update { it.copy(history = it.history - intent.entry) }
             is CalculatorIntent.ToggleHistory -> _uiState.update { it.copy(isHistoryOpen = intent.open) }
-            is CalculatorIntent.ToggleSettings -> _uiState.update { it.copy(isSettingsOpen = intent.open) }
+            is CalculatorIntent.ToggleSettings -> _uiState.update {
+                it.copy(isSettingsOpen = intent.open, settingsSection = if (intent.open) it.settingsSection else null)
+            }
+            is CalculatorIntent.ToggleSettingsSection -> _uiState.update { it.copy(settingsSection = intent.section) }
             is CalculatorIntent.SetHaptics -> viewModelScope.launch { settingsRepository.setHaptics(intent.enabled) }
             is CalculatorIntent.SetUseRadians -> viewModelScope.launch { settingsRepository.setUseRadians(intent.enabled) }
             is CalculatorIntent.SetKeepHistory -> viewModelScope.launch { settingsRepository.setKeepHistory(intent.enabled) }
+            is CalculatorIntent.SetWallpaperColors -> viewModelScope.launch { settingsRepository.setWallpaperColors(intent.enabled) }
+            is CalculatorIntent.SetNotesLine -> _uiState.update { state ->
+                val lines = state.notesLines.toMutableList()
+                if (intent.index in lines.indices) lines[intent.index] = intent.value
+                state.copy(notesLines = lines)
+            }
+            is CalculatorIntent.AddNotesLine -> _uiState.update { it.copy(notesLines = it.notesLines + intent.text) }
         }
     }
 
