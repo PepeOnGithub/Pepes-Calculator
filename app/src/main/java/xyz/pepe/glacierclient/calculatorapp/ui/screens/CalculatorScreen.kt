@@ -1,4 +1,4 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 
 package xyz.pepe.glacierclient.calculatorapp.ui.screens
 
@@ -31,8 +31,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.ShortNavigationBar
+import androidx.compose.material3.ShortNavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.ListItemDefaults
@@ -96,10 +97,10 @@ fun CalculatorScreen(viewModel: CalculatorViewModel) {
             )
         },
         bottomBar = {
-            NavigationBar {
+            ShortNavigationBar {
                 val icons = listOf(Icons.Default.Calculate, Icons.Default.Functions, Icons.Default.EditNote)
                 tabs.forEachIndexed { index, tab ->
-                    NavigationBarItem(
+                    ShortNavigationBarItem(
                         selected = pagerState.currentPage == index,
                         onClick = { scope.launch { pagerState.animateScrollToPage(index) } },
                         icon = { Icon(icons[index], contentDescription = tab.label) },
