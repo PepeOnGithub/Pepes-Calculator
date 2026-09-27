@@ -23,14 +23,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Share
+import androidx.activity.compose.BackHandler
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -40,39 +38,34 @@ import androidx.compose.material3.ShortNavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.ui.window.Dialog
 import androidx.compose.material.icons.filled.Functions
 import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.EditNote
-import androidx.compose.material.icons.filled.Vibration
 import kotlinx.coroutines.launch
-import xyz.pepe.glacierclient.calculatorapp.ui.components.BadgeShape
 import xyz.pepe.glacierclient.calculatorapp.ui.components.CalcButtonStyle
 import xyz.pepe.glacierclient.calculatorapp.ui.components.CalculatorButton
-import xyz.pepe.glacierclient.calculatorapp.ui.components.SegmentedGroup
-import xyz.pepe.glacierclient.calculatorapp.ui.components.ShapeBadge
 import xyz.pepe.glacierclient.calculatorapp.ui.mvi.CalculatorIntent
 import xyz.pepe.glacierclient.calculatorapp.ui.mvi.CalculatorMode
 import xyz.pepe.glacierclient.calculatorapp.ui.mvi.CalculatorViewModel
 import xyz.pepe.glacierclient.calculatorapp.ui.mvi.HistoryEntry
-import xyz.pepe.glacierclient.calculatorapp.ui.mvi.SettingsSection
 
 private enum class AppTab(val label: String) { CALCULATOR("Calculator"), CONVERTER("Converter"), NOTES("Notes") }
 
@@ -83,23 +76,18 @@ private enum class AppTab(val label: String) { CALCULATOR("Calculator"), CONVERT
 fun CalculatorScreen(viewModel: CalculatorViewModel) {
     val uiState by viewModel.uiState.collectAsState()
     val onIntent: (CalculatorIntent) -> Unit = viewModel::onIntent
-
-    if (uiState.isSettingsOpen) {
-        SettingsHost(uiState = uiState, onIntent = onIntent)
-        return
-    }
-
     val tabs = AppTab.entries
     val pagerState = rememberPagerState(pageCount = { tabs.size })
     val scope = rememberCoroutineScope()
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+
+    BackHandler(enabled = pagerState.currentPage != 0) {
+        scope.launch { pagerState.animateScrollToPage(0) }
+    }
 
     Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            LargeFlexibleTopAppBar(
+            TopAppBar(
                 title = { Text(tabs[pagerState.currentPage].label) },
-                subtitle = { Text("Basic, scientific, converter & notes") },
                 actions = {
                     if (tabs[pagerState.currentPage] == AppTab.CALCULATOR) {
                         IconButton(onClick = { onIntent(CalculatorIntent.ToggleMode) }) {
@@ -112,12 +100,7 @@ fun CalculatorScreen(viewModel: CalculatorViewModel) {
                     IconButton(onClick = { onIntent(CalculatorIntent.ToggleSettings(true)) }) {
                         Icon(Icons.Default.Settings, contentDescription = "Settings")
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer
-                ),
-                scrollBehavior = scrollBehavior
+                }
             )
         },
         bottomBar = {
@@ -128,7 +111,8 @@ fun CalculatorScreen(viewModel: CalculatorViewModel) {
                         selected = pagerState.currentPage == index,
                         onClick = { scope.launch { pagerState.animateScrollToPage(index) } },
                         icon = { Icon(icons[index], contentDescription = tab.label) },
-                        label = { Text(tab.label) }
+                        label = { Text(tab.label) },
+                        modifier = Modifier.testTag("nav_tab_${tab.name.lowercase()}")
                     )
                 }
             }
@@ -138,11 +122,7 @@ fun CalculatorScreen(viewModel: CalculatorViewModel) {
             when (tabs[page]) {
                 AppTab.CALCULATOR -> CalculatorPane(uiState = uiState, onIntent = onIntent)
                 AppTab.CONVERTER -> ConverterScreen()
-                AppTab.NOTES -> NotesScreen(
-                    lines = uiState.notesLines,
-                    onLineChanged = { index, value -> onIntent(CalculatorIntent.SetNotesLine(index, value)) },
-                    onAddLine = { text -> onIntent(CalculatorIntent.AddNotesLine(text)) }
-                )
+                AppTab.NOTES -> NotesScreen()
             }
         }
     }
@@ -154,6 +134,18 @@ fun CalculatorScreen(viewModel: CalculatorViewModel) {
             onSelect = { onIntent(CalculatorIntent.UseHistoryEntry(it)) },
             onDelete = { onIntent(CalculatorIntent.DeleteHistoryEntry(it)) },
             onClear = { onIntent(CalculatorIntent.ClearHistory) }
+        )
+    }
+
+    if (uiState.isSettingsOpen) {
+        SettingsDialog(
+            hapticsEnabled = uiState.settings.hapticFeedbackEnabled,
+            useRadians = uiState.settings.useRadians,
+            keepHistory = uiState.settings.keepHistory,
+            onHapticsChanged = { onIntent(CalculatorIntent.SetHaptics(it)) },
+            onRadiansChanged = { onIntent(CalculatorIntent.SetUseRadians(it)) },
+            onKeepHistoryChanged = { onIntent(CalculatorIntent.SetKeepHistory(it)) },
+            onDismiss = { onIntent(CalculatorIntent.ToggleSettings(false)) }
         )
     }
 }
@@ -179,6 +171,7 @@ private fun DisplayArea(display: String, isError: Boolean, modifier: Modifier = 
         BasicText(
             text = display,
             modifier = Modifier
+                .testTag("calculator_display")
                 .horizontalScroll(rememberScrollState())
                 .padding(8.dp),
             style = MaterialTheme.typography.displayMedium.copy(
@@ -199,49 +192,26 @@ private val BASIC_ROWS = listOf(
     listOf("%" to CalcButtonStyle.FUNCTION, "0" to CalcButtonStyle.NUMBER, "." to CalcButtonStyle.NUMBER, "=" to CalcButtonStyle.ACCENT)
 )
 
-// One column of scientific keys, stacked beside the basic grid rather than added above it —
-// matching a real scientific calculator's side panel instead of a taller vertical keypad.
-private val SCIENTIFIC_COLUMN = listOf(
-    "sin(" to CalcButtonStyle.FUNCTION,
-    "cos(" to CalcButtonStyle.FUNCTION,
-    "tan(" to CalcButtonStyle.FUNCTION,
-    "ln(" to CalcButtonStyle.FUNCTION,
-    "log(" to CalcButtonStyle.FUNCTION,
-    "sqrt(" to CalcButtonStyle.FUNCTION,
-    "^" to CalcButtonStyle.OPERATOR,
-    "!" to CalcButtonStyle.OPERATOR,
-    "pi" to CalcButtonStyle.FUNCTION,
-    "e" to CalcButtonStyle.FUNCTION
+private val SCIENTIFIC_ROW_1 = listOf(
+    "sin(" to CalcButtonStyle.FUNCTION, "cos(" to CalcButtonStyle.FUNCTION, "tan(" to CalcButtonStyle.FUNCTION, "^" to CalcButtonStyle.OPERATOR
+)
+private val SCIENTIFIC_ROW_2 = listOf(
+    "ln(" to CalcButtonStyle.FUNCTION, "log(" to CalcButtonStyle.FUNCTION, "sqrt(" to CalcButtonStyle.FUNCTION, "!" to CalcButtonStyle.OPERATOR
+)
+private val SCIENTIFIC_ROW_3 = listOf(
+    "pi" to CalcButtonStyle.FUNCTION, "e" to CalcButtonStyle.FUNCTION, "(" to CalcButtonStyle.FUNCTION, ")" to CalcButtonStyle.FUNCTION
 )
 
 @Composable
 private fun Keypad(mode: CalculatorMode, onIntent: (CalculatorIntent) -> Unit) {
-    if (mode == CalculatorMode.SCIENTIFIC) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Column(
-                modifier = Modifier.weight(0.85f),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                for ((label, style) in SCIENTIFIC_COLUMN) {
-                    CalculatorButton(label = label, style = style, modifier = Modifier.fillMaxWidth()) {
-                        onIntent(CalculatorIntent.InputToken(label))
-                    }
-                }
-            }
-            Column(
-                modifier = Modifier.weight(2f),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                for (row in BASIC_ROWS) {
-                    KeypadRow(row, onIntent)
-                }
-            }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (mode == CalculatorMode.SCIENTIFIC) {
+            KeypadRow(SCIENTIFIC_ROW_1, onIntent)
+            KeypadRow(SCIENTIFIC_ROW_2, onIntent)
+            KeypadRow(SCIENTIFIC_ROW_3, onIntent)
         }
-    } else {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            for (row in BASIC_ROWS) {
-                KeypadRow(row, onIntent)
-            }
+        for (row in BASIC_ROWS) {
+            KeypadRow(row, onIntent)
         }
     }
 }
@@ -313,192 +283,61 @@ private fun HistorySheet(
     }
 }
 
-/** Settings — a Pixel-style category list on the main page, each row navigating to its own full
- *  sub-page, exactly like Notes/Clock/Weather's SettingsHost instead of one flat popup. */
 @Composable
-private fun SettingsHost(
-    uiState: xyz.pepe.glacierclient.calculatorapp.ui.mvi.CalculatorUiState,
-    onIntent: (CalculatorIntent) -> Unit
-) {
-    val onOpen: (SettingsSection?) -> Unit = { onIntent(CalculatorIntent.ToggleSettingsSection(it)) }
-    val onBack: () -> Unit = {
-        if (uiState.settingsSection == null) onIntent(CalculatorIntent.ToggleSettings(false)) else onOpen(null)
-    }
-    when (uiState.settingsSection) {
-        null -> SettingsMainPage(onBack = onBack, onOpen = onOpen)
-        SettingsSection.APPEARANCE -> AppearancePage(
-            wallpaperColorsEnabled = uiState.settings.wallpaperColorsEnabled,
-            onWallpaperColorsChanged = { onIntent(CalculatorIntent.SetWallpaperColors(it)) },
-            onBack = onBack
-        )
-        SettingsSection.CALCULATION -> CalculationPage(
-            hapticsEnabled = uiState.settings.hapticFeedbackEnabled,
-            useRadians = uiState.settings.useRadians,
-            onHapticsChanged = { onIntent(CalculatorIntent.SetHaptics(it)) },
-            onRadiansChanged = { onIntent(CalculatorIntent.SetUseRadians(it)) },
-            onBack = onBack
-        )
-        SettingsSection.DATA -> DataPage(
-            keepHistory = uiState.settings.keepHistory,
-            notesLines = uiState.notesLines,
-            onKeepHistoryChanged = { onIntent(CalculatorIntent.SetKeepHistory(it)) },
-            onBack = onBack
-        )
-    }
-}
-
-@Composable
-private fun SettingsScaffold(
-    title: String,
-    subtitle: String,
-    onBack: () -> Unit,
-    testTag: String,
-    content: @Composable (androidx.compose.foundation.layout.PaddingValues) -> Unit
-) {
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
-    Scaffold(
-        modifier = Modifier
-            .fillMaxSize()
-            .nestedScroll(scrollBehavior.nestedScrollConnection)
-            .testTag(testTag),
-        containerColor = MaterialTheme.colorScheme.surface,
-        topBar = {
-            LargeFlexibleTopAppBar(
-                title = { Text(title) },
-                subtitle = { Text(subtitle) },
-                navigationIcon = {
-                    IconButton(onClick = onBack, modifier = Modifier.testTag("settings_back_button")) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer
-                ),
-                scrollBehavior = scrollBehavior
-            )
-        }
-    ) { innerPadding -> content(innerPadding) }
-}
-
-@Composable
-private fun CategoryRow(index: Int, icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
-    SegmentedListItem(
-        onClick = onClick,
-        shapes = ListItemDefaults.segmentedShapes(index = index, count = 3),
-        leadingContent = { ShapeBadge(icon, shape = BadgeShape.CIRCLE, tintIndex = index) },
-        supportingContent = { Text(subtitle) }
-    ) { Text(title) }
-}
-
-@Composable
-private fun SettingsMainPage(onBack: () -> Unit, onOpen: (SettingsSection) -> Unit) {
-    SettingsScaffold("Settings", "Appearance, calculation and data", onBack, "settings_page") { innerPadding ->
-        Column(modifier = Modifier.fillMaxSize().padding(innerPadding).padding(horizontal = 16.dp)) {
-            SegmentedGroup {
-                CategoryRow(0, Icons.Default.Palette, "Appearance", "Wallpaper colors") { onOpen(SettingsSection.APPEARANCE) }
-                CategoryRow(1, Icons.Default.Science, "Calculation", "Haptics and angle units") { onOpen(SettingsSection.CALCULATION) }
-                CategoryRow(2, Icons.Default.History, "Data", "History and exporting math notes") { onOpen(SettingsSection.DATA) }
-            }
-        }
-    }
-}
-
-@Composable
-private fun AppearancePage(wallpaperColorsEnabled: Boolean, onWallpaperColorsChanged: (Boolean) -> Unit, onBack: () -> Unit) {
-    SettingsScaffold("Appearance", "Wallpaper colors", onBack, "settings_appearance") { innerPadding ->
-        Column(modifier = Modifier.fillMaxSize().padding(innerPadding).padding(horizontal = 16.dp)) {
-            SegmentedGroup {
-                SegmentedListItem(
-                    checked = wallpaperColorsEnabled,
-                    onCheckedChange = onWallpaperColorsChanged,
-                    shapes = ListItemDefaults.segmentedShapes(index = 0, count = 1),
-                    leadingContent = { ShapeBadge(Icons.Default.Palette, shape = BadgeShape.CIRCLE, tintIndex = 0) },
-                    trailingContent = { Switch(checked = wallpaperColorsEnabled, onCheckedChange = null) },
-                    supportingContent = { Text("Off uses the fixed brand-green theme; on pulls colors from your wallpaper") }
-                ) { Text("Wallpaper colors") }
-            }
-        }
-    }
-}
-
-@Composable
-private fun CalculationPage(
+private fun SettingsDialog(
     hapticsEnabled: Boolean,
     useRadians: Boolean,
+    keepHistory: Boolean,
     onHapticsChanged: (Boolean) -> Unit,
     onRadiansChanged: (Boolean) -> Unit,
-    onBack: () -> Unit
+    onKeepHistoryChanged: (Boolean) -> Unit,
+    onDismiss: () -> Unit
 ) {
-    SettingsScaffold("Calculation", "Haptics and angle units", onBack, "settings_calculation") { innerPadding ->
-        Column(modifier = Modifier.fillMaxSize().padding(innerPadding).padding(horizontal = 16.dp)) {
-            SegmentedGroup {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = MaterialTheme.shapes.extraLarge,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 6.dp,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                Text(
+                    "Settings",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
                 SegmentedListItem(
                     checked = hapticsEnabled,
                     onCheckedChange = onHapticsChanged,
-                    shapes = ListItemDefaults.segmentedShapes(index = 0, count = 2),
-                    leadingContent = { ShapeBadge(Icons.Default.Vibration, shape = BadgeShape.CIRCLE, tintIndex = 0) },
+                    shapes = ListItemDefaults.segmentedShapes(index = 0, count = 3),
                     trailingContent = { Switch(checked = hapticsEnabled, onCheckedChange = null) }
                 ) { Text("Haptic feedback") }
                 SegmentedListItem(
                     checked = useRadians,
                     onCheckedChange = onRadiansChanged,
-                    shapes = ListItemDefaults.segmentedShapes(index = 1, count = 2),
-                    leadingContent = { ShapeBadge(Icons.Default.Science, shape = BadgeShape.CIRCLE, tintIndex = 1) },
+                    shapes = ListItemDefaults.segmentedShapes(index = 1, count = 3),
                     trailingContent = { Switch(checked = useRadians, onCheckedChange = null) },
                     supportingContent = { Text("Off uses degrees for sin/cos/tan") }
                 ) { Text("Use radians") }
-            }
-        }
-    }
-}
-
-@Composable
-private fun DataPage(
-    keepHistory: Boolean,
-    notesLines: List<String>,
-    onKeepHistoryChanged: (Boolean) -> Unit,
-    onBack: () -> Unit
-) {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    SettingsScaffold("Data", "History and exporting math notes", onBack, "settings_data") { innerPadding ->
-        Column(modifier = Modifier.fillMaxSize().padding(innerPadding).padding(horizontal = 16.dp)) {
-            SegmentedGroup {
                 SegmentedListItem(
                     checked = keepHistory,
                     onCheckedChange = onKeepHistoryChanged,
-                    shapes = ListItemDefaults.segmentedShapes(index = 0, count = 2),
-                    leadingContent = { ShapeBadge(Icons.Default.History, shape = BadgeShape.CIRCLE, tintIndex = 0) },
+                    shapes = ListItemDefaults.segmentedShapes(index = 2, count = 3),
                     trailingContent = { Switch(checked = keepHistory, onCheckedChange = null) }
                 ) { Text("Keep calculation history") }
-                SegmentedListItem(
-                    onClick = { exportNotesToPepesNotes(context, notesLines) },
-                    shapes = ListItemDefaults.segmentedShapes(index = 1, count = 2),
-                    leadingContent = { ShapeBadge(Icons.Default.Share, shape = BadgeShape.CIRCLE, tintIndex = 1) },
-                    supportingContent = { Text("Sends the Math notes page to Pepe's Notes as a new note") }
-                ) { Text("Export math notes to Pepe's Notes") }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Done")
+                    }
+                }
             }
         }
-    }
-}
-
-/** Sends the current Math notes page to Pepe's Notes (xyz.pepe.glacierclient.notesapp) via a
- *  plain ACTION_SEND — Notes already has a text/plain share-intent filter that turns shared text
- *  into a new note (see its ShareIntake), so this needs no changes on that side. Falls back to
- *  the normal system share sheet if Notes isn't installed. */
-private fun exportNotesToPepesNotes(context: android.content.Context, notesLines: List<String>) {
-    val text = notesLinesToPlainText(notesLines)
-    val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-        type = "text/plain"
-        putExtra(android.content.Intent.EXTRA_SUBJECT, "Math notes")
-        putExtra(android.content.Intent.EXTRA_TEXT, text)
-        setPackage(xyz.pepe.glacierclient.calculatorapp.data.NOTES_APP_PACKAGE)
-    }
-    val resolved = intent.resolveActivity(context.packageManager) != null
-    if (resolved) {
-        context.startActivity(intent)
-    } else {
-        intent.setPackage(null)
-        context.startActivity(android.content.Intent.createChooser(intent, "Export math notes"))
     }
 }

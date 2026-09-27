@@ -1,0 +1,6 @@
+{
+  "name": "Pepe's Calculator",
+  "description": "A clean and versatile calculator app featuring calculation history, scientific calculations, unit converter, and note-taking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

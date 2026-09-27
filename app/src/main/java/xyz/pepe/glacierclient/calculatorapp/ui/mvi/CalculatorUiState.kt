@@ -14,9 +14,5 @@ data class CalculatorUiState(
     val history: List<HistoryEntry> = emptyList(),
     val isHistoryOpen: Boolean = false,
     val isSettingsOpen: Boolean = false,
-    val settingsSection: SettingsSection? = null,
-    val settings: CalculatorSettings = CalculatorSettings(),
-    // Math notes lines — held here (not local Composable state) so a Settings action can export
-    // the same content the Notes tab is showing.
-    val notesLines: List<String> = listOf("")
+    val settings: CalculatorSettings = CalculatorSettings()
 )
