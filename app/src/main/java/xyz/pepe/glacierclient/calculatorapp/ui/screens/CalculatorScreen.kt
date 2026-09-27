@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -40,25 +41,31 @@ import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Functions
 import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.EditNote
+import androidx.compose.material.icons.filled.Vibration
 import kotlinx.coroutines.launch
+import xyz.pepe.glacierclient.calculatorapp.ui.components.BadgeShape
 import xyz.pepe.glacierclient.calculatorapp.ui.components.CalcButtonStyle
 import xyz.pepe.glacierclient.calculatorapp.ui.components.CalculatorButton
+import xyz.pepe.glacierclient.calculatorapp.ui.components.SegmentedGroup
+import xyz.pepe.glacierclient.calculatorapp.ui.components.ShapeBadge
 import xyz.pepe.glacierclient.calculatorapp.ui.mvi.CalculatorIntent
 import xyz.pepe.glacierclient.calculatorapp.ui.mvi.CalculatorMode
 import xyz.pepe.glacierclient.calculatorapp.ui.mvi.CalculatorViewModel
@@ -73,14 +80,31 @@ private enum class AppTab(val label: String) { CALCULATOR("Calculator"), CONVERT
 fun CalculatorScreen(viewModel: CalculatorViewModel) {
     val uiState by viewModel.uiState.collectAsState()
     val onIntent: (CalculatorIntent) -> Unit = viewModel::onIntent
+
+    if (uiState.isSettingsOpen) {
+        SettingsPage(
+            hapticsEnabled = uiState.settings.hapticFeedbackEnabled,
+            useRadians = uiState.settings.useRadians,
+            keepHistory = uiState.settings.keepHistory,
+            onHapticsChanged = { onIntent(CalculatorIntent.SetHaptics(it)) },
+            onRadiansChanged = { onIntent(CalculatorIntent.SetUseRadians(it)) },
+            onKeepHistoryChanged = { onIntent(CalculatorIntent.SetKeepHistory(it)) },
+            onBack = { onIntent(CalculatorIntent.ToggleSettings(false)) }
+        )
+        return
+    }
+
     val tabs = AppTab.entries
     val pagerState = rememberPagerState(pageCount = { tabs.size })
     val scope = rememberCoroutineScope()
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            TopAppBar(
+            LargeFlexibleTopAppBar(
                 title = { Text(tabs[pagerState.currentPage].label) },
+                subtitle = { Text("Basic, scientific, converter & notes") },
                 actions = {
                     if (tabs[pagerState.currentPage] == AppTab.CALCULATOR) {
                         IconButton(onClick = { onIntent(CalculatorIntent.ToggleMode) }) {
@@ -93,7 +117,12 @@ fun CalculatorScreen(viewModel: CalculatorViewModel) {
                     IconButton(onClick = { onIntent(CalculatorIntent.ToggleSettings(true)) }) {
                         Icon(Icons.Default.Settings, contentDescription = "Settings")
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer
+                ),
+                scrollBehavior = scrollBehavior
             )
         },
         bottomBar = {
@@ -126,18 +155,6 @@ fun CalculatorScreen(viewModel: CalculatorViewModel) {
             onSelect = { onIntent(CalculatorIntent.UseHistoryEntry(it)) },
             onDelete = { onIntent(CalculatorIntent.DeleteHistoryEntry(it)) },
             onClear = { onIntent(CalculatorIntent.ClearHistory) }
-        )
-    }
-
-    if (uiState.isSettingsOpen) {
-        SettingsDialog(
-            hapticsEnabled = uiState.settings.hapticFeedbackEnabled,
-            useRadians = uiState.settings.useRadians,
-            keepHistory = uiState.settings.keepHistory,
-            onHapticsChanged = { onIntent(CalculatorIntent.SetHaptics(it)) },
-            onRadiansChanged = { onIntent(CalculatorIntent.SetUseRadians(it)) },
-            onKeepHistoryChanged = { onIntent(CalculatorIntent.SetKeepHistory(it)) },
-            onDismiss = { onIntent(CalculatorIntent.ToggleSettings(false)) }
         )
     }
 }
@@ -274,46 +291,72 @@ private fun HistorySheet(
     }
 }
 
+/** A real Settings page — Pixel-style card of switches under a [LargeFlexibleTopAppBar] with a
+ *  back arrow, matching Notes/Clock/Weather's Settings screens instead of a small popup dialog. */
 @Composable
-private fun SettingsDialog(
+private fun SettingsPage(
     hapticsEnabled: Boolean,
     useRadians: Boolean,
     keepHistory: Boolean,
     onHapticsChanged: (Boolean) -> Unit,
     onRadiansChanged: (Boolean) -> Unit,
     onKeepHistoryChanged: (Boolean) -> Unit,
-    onDismiss: () -> Unit
+    onBack: () -> Unit
 ) {
-    Dialog(onDismissRequest = onDismiss) {
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    Scaffold(
+        modifier = Modifier
+            .fillMaxSize()
+            .nestedScroll(scrollBehavior.nestedScrollConnection)
+            .testTag("settings_page"),
+        containerColor = MaterialTheme.colorScheme.surface,
+        topBar = {
+            LargeFlexibleTopAppBar(
+                title = { Text("Settings") },
+                subtitle = { Text("Feedback, math mode and history") },
+                navigationIcon = {
+                    IconButton(onClick = onBack, modifier = Modifier.testTag("settings_back_button")) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer
+                ),
+                scrollBehavior = scrollBehavior
+            )
+        }
+    ) { innerPadding ->
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp)
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(horizontal = 16.dp)
         ) {
-            Text(
-                "Settings",
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(16.dp)
-            )
-            SegmentedListItem(
-                checked = hapticsEnabled,
-                onCheckedChange = onHapticsChanged,
-                shapes = ListItemDefaults.segmentedShapes(index = 0, count = 3),
-                trailingContent = { Switch(checked = hapticsEnabled, onCheckedChange = null) }
-            ) { Text("Haptic feedback") }
-            SegmentedListItem(
-                checked = useRadians,
-                onCheckedChange = onRadiansChanged,
-                shapes = ListItemDefaults.segmentedShapes(index = 1, count = 3),
-                trailingContent = { Switch(checked = useRadians, onCheckedChange = null) },
-                supportingContent = { Text("Off uses degrees for sin/cos/tan") }
-            ) { Text("Use radians") }
-            SegmentedListItem(
-                checked = keepHistory,
-                onCheckedChange = onKeepHistoryChanged,
-                shapes = ListItemDefaults.segmentedShapes(index = 2, count = 3),
-                trailingContent = { Switch(checked = keepHistory, onCheckedChange = null) }
-            ) { Text("Keep calculation history") }
+            SegmentedGroup {
+                SegmentedListItem(
+                    checked = hapticsEnabled,
+                    onCheckedChange = onHapticsChanged,
+                    shapes = ListItemDefaults.segmentedShapes(index = 0, count = 3),
+                    leadingContent = { ShapeBadge(Icons.Default.Vibration, shape = BadgeShape.CIRCLE, tintIndex = 0) },
+                    trailingContent = { Switch(checked = hapticsEnabled, onCheckedChange = null) }
+                ) { Text("Haptic feedback") }
+                SegmentedListItem(
+                    checked = useRadians,
+                    onCheckedChange = onRadiansChanged,
+                    shapes = ListItemDefaults.segmentedShapes(index = 1, count = 3),
+                    leadingContent = { ShapeBadge(Icons.Default.Science, shape = BadgeShape.CIRCLE, tintIndex = 1) },
+                    trailingContent = { Switch(checked = useRadians, onCheckedChange = null) },
+                    supportingContent = { Text("Off uses degrees for sin/cos/tan") }
+                ) { Text("Use radians") }
+                SegmentedListItem(
+                    checked = keepHistory,
+                    onCheckedChange = onKeepHistoryChanged,
+                    shapes = ListItemDefaults.segmentedShapes(index = 2, count = 3),
+                    leadingContent = { ShapeBadge(Icons.Default.History, shape = BadgeShape.CIRCLE, tintIndex = 2) },
+                    trailingContent = { Switch(checked = keepHistory, onCheckedChange = null) }
+                ) { Text("Keep calculation history") }
+            }
         }
     }
 }
