@@ -23,15 +23,16 @@ object CalculatorEngine {
 
     class EvaluationException(message: String) : Exception(message)
 
-    /** Evaluates [expression] and returns the numeric result, or throws [EvaluationException]. */
-    fun evaluate(expression: String, useRadians: Boolean): Double {
+    /** Evaluates [expression] and returns the numeric result, or throws [EvaluationException].
+     *  [variables] lets callers (e.g. the Notes graphing screen) bind names like "x" to a value. */
+    fun evaluate(expression: String, useRadians: Boolean, variables: Map<String, Double> = emptyMap()): Double {
         val normalized = expression
             .replace('×', '*')
             .replace('÷', '/')
             .replace('−', '-')
             .trim()
         if (normalized.isEmpty()) throw EvaluationException("Empty expression")
-        val parser = Parser(normalized, useRadians)
+        val parser = Parser(normalized, useRadians, variables)
         val result = parser.parseExpression()
         parser.skipSpaces()
         if (!parser.isAtEnd()) throw EvaluationException("Unexpected character at ${parser.pos}")
@@ -39,7 +40,11 @@ object CalculatorEngine {
         return result
     }
 
-    private class Parser(private val input: String, private val useRadians: Boolean) {
+    private class Parser(
+        private val input: String,
+        private val useRadians: Boolean,
+        private val variables: Map<String, Double>
+    ) {
         var pos = 0
 
         fun isAtEnd() = pos >= input.length
@@ -138,11 +143,12 @@ object CalculatorEngine {
             val start = pos
             while (!isAtEnd() && input[pos].isLetter()) pos++
             val name = input.substring(start, pos)
-            return when (name) {
-                "pi" -> PI
-                "e" -> Math.E
+            return when {
+                name == "pi" -> PI
+                name == "e" -> Math.E
+                peek() != '(' -> variables[name]
+                    ?: throw EvaluationException("Unknown identifier '$name'")
                 else -> {
-                    if (peek() != '(') throw EvaluationException("Unknown identifier '$name'")
                     consume()
                     val arg = parseExpression()
                     if (peek() != ')') throw EvaluationException("Missing closing parenthesis")

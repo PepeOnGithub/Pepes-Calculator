@@ -38,6 +38,7 @@ class CalculatorViewModel(private val settingsRepository: SettingsRepository) : 
                 it.copy(expression = intent.entry.expression, display = intent.entry.expression, isHistoryOpen = false, isError = false)
             }
             CalculatorIntent.ClearHistory -> _uiState.update { it.copy(history = emptyList()) }
+            is CalculatorIntent.DeleteHistoryEntry -> _uiState.update { it.copy(history = it.history - intent.entry) }
             is CalculatorIntent.ToggleHistory -> _uiState.update { it.copy(isHistoryOpen = intent.open) }
             is CalculatorIntent.ToggleSettings -> _uiState.update { it.copy(isSettingsOpen = intent.open) }
             is CalculatorIntent.SetHaptics -> viewModelScope.launch { settingsRepository.setHaptics(intent.enabled) }

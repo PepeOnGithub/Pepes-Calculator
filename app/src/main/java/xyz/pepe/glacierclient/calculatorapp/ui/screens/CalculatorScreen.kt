@@ -2,6 +2,7 @@
 
 package xyz.pepe.glacierclient.calculatorapp.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,7 +16,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.Settings
@@ -25,6 +31,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.ListItemDefaults
@@ -35,12 +43,19 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.material.icons.filled.Functions
+import androidx.compose.material.icons.filled.Calculate
+import androidx.compose.material.icons.filled.EditNote
+import kotlinx.coroutines.launch
 import xyz.pepe.glacierclient.calculatorapp.ui.components.CalcButtonStyle
 import xyz.pepe.glacierclient.calculatorapp.ui.components.CalculatorButton
 import xyz.pepe.glacierclient.calculatorapp.ui.mvi.CalculatorIntent
@@ -48,37 +63,58 @@ import xyz.pepe.glacierclient.calculatorapp.ui.mvi.CalculatorMode
 import xyz.pepe.glacierclient.calculatorapp.ui.mvi.CalculatorViewModel
 import xyz.pepe.glacierclient.calculatorapp.ui.mvi.HistoryEntry
 
+private enum class AppTab(val label: String) { CALCULATOR("Calculator"), CONVERTER("Converter"), NOTES("Notes") }
+
+/** Top-level host: three tabs (Calculator, Converter, Math notes), matching the iPad Calculator's
+ *  mode toggle for converter access plus a dedicated notes tab. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun CalculatorScreen(viewModel: CalculatorViewModel) {
     val uiState by viewModel.uiState.collectAsState()
     val onIntent: (CalculatorIntent) -> Unit = viewModel::onIntent
+    val tabs = AppTab.entries
+    val pagerState = rememberPagerState(pageCount = { tabs.size })
+    val scope = rememberCoroutineScope()
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Calculator") },
+                title = { Text(tabs[pagerState.currentPage].label) },
                 actions = {
-                    IconButton(onClick = { onIntent(CalculatorIntent.ToggleMode) }) {
-                        Icon(Icons.Default.Science, contentDescription = "Toggle scientific mode")
-                    }
-                    IconButton(onClick = { onIntent(CalculatorIntent.ToggleHistory(true)) }) {
-                        Icon(Icons.Default.History, contentDescription = "History")
+                    if (tabs[pagerState.currentPage] == AppTab.CALCULATOR) {
+                        IconButton(onClick = { onIntent(CalculatorIntent.ToggleMode) }) {
+                            Icon(Icons.Default.Science, contentDescription = "Toggle scientific mode")
+                        }
+                        IconButton(onClick = { onIntent(CalculatorIntent.ToggleHistory(true)) }) {
+                            Icon(Icons.Default.History, contentDescription = "History")
+                        }
                     }
                     IconButton(onClick = { onIntent(CalculatorIntent.ToggleSettings(true)) }) {
                         Icon(Icons.Default.Settings, contentDescription = "Settings")
                     }
                 }
             )
+        },
+        bottomBar = {
+            NavigationBar {
+                val icons = listOf(Icons.Default.Calculate, Icons.Default.Functions, Icons.Default.EditNote)
+                tabs.forEachIndexed { index, tab ->
+                    NavigationBarItem(
+                        selected = pagerState.currentPage == index,
+                        onClick = { scope.launch { pagerState.animateScrollToPage(index) } },
+                        icon = { Icon(icons[index], contentDescription = tab.label) },
+                        label = { Text(tab.label) }
+                    )
+                }
+            }
         }
     ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(16.dp)
-        ) {
-            DisplayArea(display = uiState.display, isError = uiState.isError, modifier = Modifier.weight(1f))
-            Keypad(mode = uiState.mode, onIntent = onIntent)
+        HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize().padding(innerPadding)) { page ->
+            when (tabs[page]) {
+                AppTab.CALCULATOR -> CalculatorPane(uiState = uiState, onIntent = onIntent)
+                AppTab.CONVERTER -> ConverterScreen()
+                AppTab.NOTES -> NotesScreen()
+            }
         }
     }
 
@@ -87,6 +123,7 @@ fun CalculatorScreen(viewModel: CalculatorViewModel) {
             history = uiState.history,
             onDismiss = { onIntent(CalculatorIntent.ToggleHistory(false)) },
             onSelect = { onIntent(CalculatorIntent.UseHistoryEntry(it)) },
+            onDelete = { onIntent(CalculatorIntent.DeleteHistoryEntry(it)) },
             onClear = { onIntent(CalculatorIntent.ClearHistory) }
         )
     }
@@ -101,6 +138,21 @@ fun CalculatorScreen(viewModel: CalculatorViewModel) {
             onKeepHistoryChanged = { onIntent(CalculatorIntent.SetKeepHistory(it)) },
             onDismiss = { onIntent(CalculatorIntent.ToggleSettings(false)) }
         )
+    }
+}
+
+@Composable
+private fun CalculatorPane(
+    uiState: xyz.pepe.glacierclient.calculatorapp.ui.mvi.CalculatorUiState,
+    onIntent: (CalculatorIntent) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        DisplayArea(display = uiState.display, isError = uiState.isError, modifier = Modifier.weight(1f))
+        Keypad(mode = uiState.mode, onIntent = onIntent)
     }
 }
 
@@ -178,15 +230,17 @@ private fun HistorySheet(
     history: List<HistoryEntry>,
     onDismiss: () -> Unit,
     onSelect: (HistoryEntry) -> Unit,
+    onDelete: (HistoryEntry) -> Unit,
     onClear: () -> Unit
 ) {
+    val clipboard = LocalClipboardManager.current
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text("History", style = MaterialTheme.typography.titleLarge)
-            TextButton(onClick = onClear) { Text("Clear") }
+            TextButton(onClick = onClear) { Text("Clear all") }
         }
         if (history.isEmpty()) {
             Text(
@@ -200,7 +254,17 @@ private fun HistorySheet(
                     ListItem(
                         headlineContent = { Text(entry.result, style = MaterialTheme.typography.titleMedium) },
                         supportingContent = { Text(entry.expression) },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth().clickable { onSelect(entry) },
+                        trailingContent = {
+                            Row {
+                                IconButton(onClick = { clipboard.setText(AnnotatedString(entry.result)) }) {
+                                    Icon(Icons.Default.ContentCopy, contentDescription = "Copy result")
+                                }
+                                IconButton(onClick = { onDelete(entry) }) {
+                                    Icon(Icons.Default.Delete, contentDescription = "Delete entry")
+                                }
+                            }
+                        }
                     )
                     HorizontalDivider()
                 }

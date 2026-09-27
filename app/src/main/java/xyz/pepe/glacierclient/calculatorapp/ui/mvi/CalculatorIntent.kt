@@ -8,6 +8,7 @@ sealed interface CalculatorIntent {
     object ToggleMode : CalculatorIntent
     data class UseHistoryEntry(val entry: HistoryEntry) : CalculatorIntent
     object ClearHistory : CalculatorIntent
+    data class DeleteHistoryEntry(val entry: HistoryEntry) : CalculatorIntent
     data class ToggleHistory(val open: Boolean) : CalculatorIntent
     data class ToggleSettings(val open: Boolean) : CalculatorIntent
     data class SetHaptics(val enabled: Boolean) : CalculatorIntent
