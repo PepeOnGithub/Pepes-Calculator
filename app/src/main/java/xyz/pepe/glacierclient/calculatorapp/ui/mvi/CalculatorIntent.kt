@@ -14,4 +14,12 @@ sealed interface CalculatorIntent {
     data class SetHaptics(val enabled: Boolean) : CalculatorIntent
     data class SetUseRadians(val enabled: Boolean) : CalculatorIntent
     data class SetKeepHistory(val enabled: Boolean) : CalculatorIntent
+    data class SetWallpaperColors(val enabled: Boolean) : CalculatorIntent
+    data class ToggleSettingsSection(val section: SettingsSection?) : CalculatorIntent
+    data class SetNotesLine(val index: Int, val value: String) : CalculatorIntent
+    data class AddNotesLine(val text: String = "") : CalculatorIntent
+
+    // Handwriting input for Math Notes — real ML Kit Digital Ink Recognition.
+    data class RecognizeInk(val targetLine: Int, val strokes: List<List<Pair<Float, Float>>>) : CalculatorIntent
+    object PrepareInkModel : CalculatorIntent
 }

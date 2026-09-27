@@ -29,7 +29,7 @@ def fa_path(name):
 
 
 PATH = fa_path("calculator")  # viewBox 384 x 512
-GS = 60.0 / 512.0
+GS = 45.0 / 512.0  # smaller, more margin — full-size content was cropping the rim on some launchers
 GX = 54.0 - 384.0 * GS / 2.0
 GY = 54.0 - 512.0 * GS / 2.0
 
@@ -132,8 +132,8 @@ def svg(size, shape):
 <linearGradient id="bg" x1="54" y1="0" x2="54" y2="108" gradientUnits="userSpaceOnUse">
 <stop offset="0" stop-color="#{BG_HI[2:]}"/><stop offset="0.5" stop-color="#{BG_MID[2:]}"/><stop offset="1" stop-color="#{BG_LO[2:]}"/>
 </linearGradient>
-<linearGradient id="rim" x1="54" y1="0" x2="54" y2="80" gradientUnits="userSpaceOnUse">
-<stop offset="0" stop-color="#fff" stop-opacity="0.55"/><stop offset="0.35" stop-color="#fff" stop-opacity="0.12"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
+<linearGradient id="rim" x1="54" y1="0" x2="54" y2="100" gradientUnits="userSpaceOnUse">
+<stop offset="0" stop-color="#fff" stop-opacity="0.9"/><stop offset="0.45" stop-color="#fff" stop-opacity="0.4"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
 </linearGradient>
 <linearGradient id="glyph" x1="0" y1="0" x2="384" y2="512" gradientUnits="userSpaceOnUse">
 <stop offset="0" stop-color="#{GLYPH_HI[2:]}"/><stop offset="1" stop-color="#{GLYPH_LO[2:]}"/>
@@ -143,7 +143,7 @@ def svg(size, shape):
 <rect width="108" height="108" fill="url(#bg)"/>
 {shadows}
 <g transform="translate({GX} {GY}) scale({GS})"><path d="{PATH}" fill="url(#glyph)"/></g>
-{rim.replace("/>", ' fill="none" stroke="url(#rim)" stroke-width="3"/>')}
+{rim.replace("/>", ' fill="none" stroke="url(#rim)" stroke-width="6"/>')}
 </g></svg>"""
 
 

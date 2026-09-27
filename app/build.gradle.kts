@@ -74,6 +74,8 @@ dependencies {
   implementation(libs.androidx.lifecycle.viewmodel.compose)
   implementation(libs.androidx.datastore.preferences)
   implementation(libs.kotlinx.coroutines.android)
+  implementation(libs.kotlinx.coroutines.play.services)
+  implementation(libs.digital.ink.recognition)
 
   testImplementation(libs.junit)
   testImplementation(libs.kotlinx.coroutines.test)
