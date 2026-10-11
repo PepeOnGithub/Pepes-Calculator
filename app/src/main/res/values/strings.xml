@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">Pepe\'s Calculator</string>
+    <string name="widget_calculator_name">Calculator</string>
+    <string name="widget_calculator_description">A keypad for quick sums right on your home screen</string>
 </resources>

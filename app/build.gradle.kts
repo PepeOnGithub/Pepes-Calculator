@@ -43,6 +43,14 @@ android {
         }
       }
     }
+    // Installable, R8-shrunk build signed like the debug build (so it updates the apps already on the phone):
+    // `./gradlew assembleOptimized`. Much faster at runtime than debug (Compose and R8 optimisations on).
+    create("optimized") {
+      initWith(getByName("release"))
+      signingConfig = getByName("debug").signingConfig
+      isDebuggable = false
+      matchingFallbacks += listOf("release")
+    }
   }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_11
@@ -63,6 +71,9 @@ tasks.matching { it.name.contains("AarMetadata") }.configureEach { enabled = fal
 dependencies {
   implementation(platform(libs.androidx.compose.bom))
   implementation(libs.androidx.compose.material3)
+  implementation(libs.androidx.glance.appwidget)
+  // Glance needs WorkManager; pin the version the other Pepe apps already use (offline builds need it cached).
+  implementation("androidx.work:work-runtime-ktx:2.12.0")
   implementation(libs.androidx.compose.ui)
   implementation(libs.androidx.compose.ui.graphics)
   implementation(libs.androidx.compose.ui.tooling.preview)

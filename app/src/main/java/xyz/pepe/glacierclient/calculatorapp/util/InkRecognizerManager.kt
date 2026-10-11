@@ -1,67 +1,69 @@
 package xyz.pepe.glacierclient.calculatorapp.util
 
+import com.google.mlkit.common.model.DownloadConditions
+import com.google.mlkit.common.model.RemoteModelManager
 import com.google.mlkit.vision.digitalink.DigitalInkRecognition
 import com.google.mlkit.vision.digitalink.DigitalInkRecognitionModel
 import com.google.mlkit.vision.digitalink.DigitalInkRecognitionModelIdentifier
 import com.google.mlkit.vision.digitalink.DigitalInkRecognizer
 import com.google.mlkit.vision.digitalink.DigitalInkRecognizerOptions
 import com.google.mlkit.vision.digitalink.Ink
-import com.google.mlkit.common.model.DownloadConditions
-import com.google.mlkit.common.model.RemoteModelManager
 import kotlinx.coroutines.tasks.await
+import xyz.pepe.glacierclient.calculatorapp.ui.mvi.InkPoint
 
 /**
- * Wraps Google ML Kit's on-device Digital Ink Recognition — this is what actually turns Math
- * Notes' handwritten strokes into text; there is no simulation here. The model ("en-US", which
- * recognizes Latin letters and digits well) downloads once over the network the first time it's
- * used and then runs fully on-device. It doesn't understand 2D math layout the way MyScript's
- * commercial math engine does — it recognizes the strokes as handwritten text/digits, which is
- * then read as a normal left-to-right expression, same as if it had been typed.
+ * Google ML Kit's on-device Digital Ink Recognition — what turns Math Notes' handwriting into
+ * text. The "en-US" model downloads once (needs a connection) and then runs fully offline. It
+ * reads strokes left to right as text, so "3x+2=" works, but it doesn't lay out 2D fractions.
  */
 class InkRecognizerManager {
 
-    private val modelIdentifier = DigitalInkRecognitionModelIdentifier.EN_US
-    private val model: DigitalInkRecognitionModel = DigitalInkRecognitionModel.builder(modelIdentifier).build()
-    private val remoteModelManager = RemoteModelManager.getInstance()
-    private val recognizer: DigitalInkRecognizer =
-        DigitalInkRecognition.getClient(DigitalInkRecognizerOptions.builder(model).build())
+  private val model: DigitalInkRecognitionModel =
+    DigitalInkRecognitionModel.builder(DigitalInkRecognitionModelIdentifier.EN_US).build()
+  private val remoteModelManager = RemoteModelManager.getInstance()
+  private val recognizer: DigitalInkRecognizer =
+    DigitalInkRecognition.getClient(DigitalInkRecognizerOptions.builder(model).build())
 
-    private var modelReady = false
+  @Volatile private var modelReady = false
 
-    suspend fun ensureModelDownloaded(): Boolean {
-        if (modelReady) return true
-        return try {
-            if (!remoteModelManager.isModelDownloaded(model).await()) {
-                remoteModelManager.download(model, DownloadConditions.Builder().build()).await()
-            }
-            modelReady = true
-            true
-        } catch (e: Exception) {
-            false
-        }
+  suspend fun ensureModelDownloaded(): Boolean {
+    if (modelReady) return true
+    return try {
+      if (!remoteModelManager.isModelDownloaded(model).await()) {
+        remoteModelManager.download(model, DownloadConditions.Builder().build()).await()
+      }
+      modelReady = true
+      true
+    } catch (_: Exception) {
+      false
     }
+  }
 
-    /** Recognizes [strokes] (each a list of (x, y) points from one continuous touch drag) and
-     *  returns the single best-guess text, or null if recognition failed or isn't ready yet. */
-    suspend fun recognize(strokes: List<List<Pair<Float, Float>>>): String? {
-        if (strokes.isEmpty()) return null
-        if (!ensureModelDownloaded()) return null
-
-        val inkBuilder = Ink.builder()
-        val baseTime = System.currentTimeMillis()
-        strokes.forEach { points ->
-            val strokeBuilder = Ink.Stroke.builder()
-            points.forEachIndexed { index, (x, y) ->
-                strokeBuilder.addPoint(Ink.Point.create(x, y, (baseTime + index).toLong()))
-            }
-            inkBuilder.addStroke(strokeBuilder.build())
-        }
-
-        return try {
-            val result = recognizer.recognize(inkBuilder.build()).await()
-            result.candidates.firstOrNull()?.text
-        } catch (e: Exception) {
-            null
-        }
+  /** Best candidate for [strokes], cleaned up for math, or null if recognition failed. */
+  suspend fun recognize(strokes: List<List<InkPoint>>): String? {
+    if (strokes.isEmpty() || !ensureModelDownloaded()) return null
+    val ink = Ink.builder()
+    strokes.forEach { points ->
+      val stroke = Ink.Stroke.builder()
+      points.forEach { stroke.addPoint(Ink.Point.create(it.x, it.y, it.t)) }
+      ink.addStroke(stroke.build())
     }
+    return try {
+      val candidates = recognizer.recognize(ink.build()).await().candidates.map { it.text }
+      // Prefer a candidate that reads as math over one that reads as a word ("2+3" over "Zt3").
+      (candidates.firstOrNull { looksLikeMath(it) } ?: candidates.firstOrNull())?.let(::cleanUp)
+    } catch (_: Exception) {
+      null
+    }
+  }
+
+  private fun looksLikeMath(s: String) = s.count { it.isDigit() || it in "+-×x*/÷=()^.%" } >= s.length / 2
+
+  /** Handwriting look-alikes → calculator symbols. */
+  private fun cleanUp(s: String): String = s
+    .replace('÷', '/').replace('—', '-').replace('–', '-').replace('•', '×')
+    .replace(Regex("""(?<=\d)\s*[xX]\s*(?=\d)"""), "×")
+    .replace(Regex("""(?<=\d)[oO](?=\d)|(?<=\d)[oO]\b"""), "0")
+    .replace(Regex("""(?<=\d)[lI|](?=\d)"""), "1")
+    .trim()
 }

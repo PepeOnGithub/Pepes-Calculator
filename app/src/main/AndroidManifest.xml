@@ -5,6 +5,16 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!-- Pepe ecosystem: package visibility for cross-app actions (Android 11+). -->
+    <queries>
+        <package android:name="xyz.pepe.glacierclient.calendarapp" />
+        <package android:name="xyz.pepe.glacierclient.clockapp" />
+        <package android:name="xyz.pepe.glacierclient.musicapp" />
+        <package android:name="xyz.pepe.glacierclient.notesapp" />
+        <package android:name="xyz.pepe.glacierclient.translatorapp" />
+        <package android:name="xyz.pepe.glacierclient.weatherapp" />
+    </queries>
+
     <application
         android:name=".CalculatorApplication"
         android:allowBackup="true"
@@ -12,6 +22,7 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
+        android:enableOnBackInvokedCallback="true"
         android:theme="@style/Theme.PepesCalculator">
         <activity
             android:name=".MainActivity"
@@ -22,7 +33,17 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Pepe ecosystem agent: pepe://calculator/… actions from sibling apps. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="pepe" android:host="calculator" />
+            </intent-filter>
         </activity>
+        <receiver android:name=".widget.CalculatorWidgetReceiver" android:exported="true" android:label="@string/widget_calculator_name">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/calculator_widget_info" />
+        </receiver>
     </application>
 
 </manifest>
